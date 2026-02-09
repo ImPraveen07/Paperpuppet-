@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Puppet Physics - Grab and Swing</title>
+<style>
+  body {
+    background: white;
+    margin: 0;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    height: 100vh;
+    /* Prevent scrolling/refresh on mobile pull-down */
+    touch-action: none;
+  }
+
+  #puppet {
+    position: relative;
+    width: 300px;
+    top: 0px;
+    /* This ensures the puppet swings from the top of the string */
+    transform-origin: top center;
+    cursor: grab;
+  }
+
+  #puppet:active {
+    cursor: grabbing;
+  }
+
+  #string {
+    width: 2px;
+    height: 100px;
+    background: black;
+    margin: 0 auto;
+  }
+
+  #puppet img {
+    position: absolute;
+    user-select: none;
+    /* Enabled pointer events so you can grab the images */
+    pointer-events: auto;
+  }
+
+  /* --- Puppet Parts --- */
+  #hand { z-index: 1; width: 100px; top: 155px; left: 98px; }
+  #body { z-index: -1; width: 300px; top: 103px; left: 9px; }
+  #cloth { z-index: 3; width: 240px; top: 5px; left: 20px; }
+  #head { z-index: 4; width: 200px; top: 60px; left: 50px; }
+</style>
+</head>
+<body>
+
+<div id="puppet">
+  <div id="string"></div>
+  <img id="hand" src="hand.png" alt="hands">
+  <img id="body" src="body.png" alt="body">
+  <img id="cloth" src="cloth.png" alt="cloth">
+  <img id="head" src="head.png" alt="head">
+</div>
+
+<script>
+const puppet = document.getElementById('puppet');
+let isDragging = false;
+
+// --- Physics Constants ---
+let currentAngle = 0;      // Current rotation in degrees
+let velocity = 0;          // Speed of the swing
+const gravity = 0.25;      // Strength of the pull (increase for a "heavier" puppet)
+const damping = 0.982;     // Air resistance (0.99 = swings forever, 0.90 = stops fast)
+let animationFrame;
+
+// Calculate the angle based on where the user is touching/clicking
+function calculateAngle(clientX, clientY) {
+  const rect = puppet.getBoundingClientRect();
+  const pivotX = rect.left + rect.width / 2; // Top of the string
+  const pivotY = rect.top;
+
+  const dx = clientX - pivotX;
+  const dy = clientY - pivotY;
+
+  // atan2 gives us the angle in radians, then we convert to degrees
+  let angle = Math.atan2(dx, dy) * (180 / Math.PI);
+  
+  // Limit the swing so it doesn't loop over the top
+  return Math.max(-85, Math.min(85, angle));
+}
+
+// --- Interaction ---
+function handleMove(e) {
+  if (!isDragging) return;
+
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  // Update position to match finger exactly
+  currentAngle = calculateAngle(clientX, clientY);
+  puppet.style.transform = `rotate(${-currentAngle}deg)`;
+}
+
+function startDrag() {
+  isDragging = true;
+  velocity = 0; 
+  cancelAnimationFrame(animationFrame);
+}
+
+function endDrag() {
+  if (isDragging) {
+    isDragging = false;
+    animate(); // Kick off the gravity simulation
+  }
+}
+
+puppet.addEventListener('mousedown', startDrag);
+window.addEventListener('mousemove', handleMove);
+window.addEventListener('mouseup', endDrag);
+
+puppet.addEventListener('touchstart', startDrag);
+window.addEventListener('touchmove', handleMove);
+window.addEventListener('touchend', endDrag);
+
+// --- The Gravity Engine ---
+function animate() {
+  if (isDragging) return;
+
+  /**
+   * REAL GRAVITY MATH:
+   * The restoring force is proportional to the Sine of the angle.
+   * This makes the swing slow down naturally at the peaks.
+   */
+  let force = -gravity * Math.sin(currentAngle * Math.PI / 180);
+  
+  velocity += force;      // Apply gravity to velocity
+  velocity *= damping;    // Apply air friction
+  currentAngle += velocity; // Apply velocity to position
+
+  puppet.style.transform = `rotate(${-currentAngle}deg)`;
+
+  // Keep the loop running until it's basically still
+  if (Math.abs(velocity) > 0.001 || Math.abs(currentAngle) > 0.1) {
+    animationFrame = requestAnimationFrame(animate);
+  } else {
+    currentAngle = 0;
+    puppet.style.transform = `rotate(0deg)`;
+  }
+}
+
+animate();
+</script>
+
+</body>
+</html>
+
